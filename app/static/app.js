@@ -13,8 +13,11 @@ async function api(url, opts) {
   if (!r.ok) throw new Error(j.detail || r.statusText);
   return j;
 }
-function showLogin() { $('#app').hidden = true; $('#login').hidden = false; clearInterval(poll); }
-function showApp() { $('#login').hidden = true; $('#app').hidden = false; refresh(); clearInterval(poll); poll = setInterval(refresh, 1500); }
+function showLogin() { $('#app').hidden = true; $('#login').hidden = false; stopPolling(); }
+function showApp() { $('#login').hidden = true; $('#app').hidden = false; refresh(); }
+// poll /api/status only while a training run is in progress; stop as soon as it finishes
+function startPolling() { if (!poll) poll = setInterval(refresh, 1500); }
+function stopPolling() { clearInterval(poll); poll = null; }
 
 $('#loginForm').onsubmit = async e => {
   e.preventDefault(); $('#loginErr').textContent = '';
@@ -36,7 +39,8 @@ $('#runBtn').onclick = async () => {
 };
 
 async function refresh() {
-  let s; try { s = await api('/api/status'); } catch { return; }
+  let s; try { s = await api('/api/status'); } catch { return stopPolling(); }
+  if (s.state === 'running') startPolling(); else stopPolling();
   $('#barFill').style.width = (s.state === 'done' ? 100 : s.progress * 100) + '%';
   $('#statusMsg').textContent = s.state === 'done' ? `Done – ${s.results.length} experiments complete.` :
     s.state === 'error' ? '' : s.message;
