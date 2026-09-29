@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+scikit-learn
+numpy
+python-multipart
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+websockets
+certifi
+langdetect

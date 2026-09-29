@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TSaaS – Twitter Emotion Analysis</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head><body>
+<section id="login" class="center">
+  <form class="card" id="loginForm">
+    <h1>Twitter Emotion Analysis <span class="tag">TSaaS</span></h1>
+    <p class="muted">Cloud-deployed intelligent analysis of Twitter data</p>
+    <label>Username<input id="user" autocomplete="username" required></label>
+    <label>Password<input id="pass" type="password" autocomplete="current-password" required></label>
+    <button class="primary" type="submit">Login</button>
+    <p class="err" id="loginErr"></p>
+  </form>
+</section>
+
+<main id="app" hidden>
+  <header>
+    <div><h1>Twitter Emotion Analysis <span class="tag">TSaaS</span></h1>
+      <p class="muted">NLP · Naive Bayes · SVM · ANN · HySimNet · RNN-LSTM</p></div>
+    <button id="logout">Logout</button>
+  </header>
+  <nav>
+    <button data-tab="run" class="active">Experiments</button>
+    <button data-tab="results">Results</button>
+    <button data-tab="live">Live Analysis</button>
+  </nav>
+
+  <section id="tab-run" class="tab">
+    <div class="card">
+      <h2>Run experiments</h2>
+      <p class="muted">Trains 5 classifiers × 6 feature modes on an 80/20 stratified split and reports metrics measured on the held-out 20%.
+        Upload a <code>text;label</code> file (labels: joy, sadness, anger, fear, love, surprise) or use the bundled dataset.</p>
+      <div class="row">
+        <input type="file" id="file" accept=".txt,.csv">
+        <button class="primary" id="runBtn">Run</button>
+      </div>
+      <div class="bar"><div id="barFill"></div></div>
+      <p id="statusMsg" class="muted">Loading…</p>
+      <p class="err" id="runErr"></p>
+    </div>
+    <div class="cards" id="summaryCards"></div>
+    <div class="card"><h2>Class distribution</h2><div class="chartbox short"><canvas id="pie"></canvas></div></div>
+  </section>
+
+  <section id="tab-results" class="tab" hidden>
+    <div class="cards" id="bestCards"></div>
+    <div class="card"><h2>Accuracy by classifier and feature mode</h2><div class="chartbox"><canvas id="bar"></canvas></div></div>
+    <div class="card"><h2>All experiments</h2><div class="scroll"><table id="resTable"></table></div>
+      <p class="muted">Click a row to see its confusion matrix and per-class metrics.</p></div>
+    <div class="card" id="detail" hidden><h2 id="detailTitle"></h2><div id="cm"></div><div class="scroll"><table id="pcTable"></table></div></div>
+  </section>
+
+  <section id="tab-live" class="tab" hidden>
+    <div class="card">
+      <h2>Classify a tweet</h2>
+      <div class="row"><input id="text" placeholder="e.g. I can't believe how amazing today was!" maxlength="1000">
+        <button class="primary" id="predictBtn">Analyze</button></div>
+      <div id="predOut"></div>
+    </div>
+    <div class="card">
+      <h2>Live stream</h2>
+      <div class="row">
+        <select id="source"><option value="bluesky">Bluesky – real live posts</option><option value="dataset">Dataset replay (offline demo)</option></select>
+        <input id="keyword" placeholder="Optional keyword filter, e.g. election" maxlength="50">
+        <button id="streamBtn">Start stream</button></div>
+      <p id="streamStat" class="muted">Bluesky posts are English-only, public, and shown at ~1 per second. Without a keyword you get a random sample of everything being posted.</p>
+      <div id="tally" class="row"></div>
+      <div id="feed"></div>
+    </div>
+  </section>
+</main>
+<script src="/static/app.js"></script>
+</body></html>
