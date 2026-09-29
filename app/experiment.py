@@ -26,7 +26,7 @@ def load_dataset(path_or_text):
     return texts, np.array(labels), skipped
 
 
-def run_experiments(texts, y, progress=None, test_size=0.2, seed=42):
+def run_experiments(texts, y, progress=None, test_size=0.2, seed=42, classifiers=None):
     """Returns (results, trained) where trained[(clf, mode)] = (features, model)."""
     docs = [Doc(t) for t in texts]
     tr, te = train_test_split(np.arange(len(docs)), test_size=test_size, random_state=seed, stratify=y)
@@ -34,10 +34,11 @@ def run_experiments(texts, y, progress=None, test_size=0.2, seed=42):
     ytr, yte = y[tr], y[te]
     fb = FeatureBuilder().fit(dtr)
     results, trained = [], {}
-    total, done = len(MODES) * len(CLASSIFIERS), 0
+    classifiers = classifiers or CLASSIFIERS
+    total, done = len(MODES) * len(classifiers), 0
     for mode in MODES:
         Xtr, Xte = fb.matrix(dtr, mode), fb.matrix(dte, mode)
-        for C in CLASSIFIERS:
+        for C in classifiers:
             m = C()
             if progress: progress(done / total, f"Training {m.name} on {mode}")
             t0 = time.time(); m.fit(Xtr, ytr, dtr); train_ms = (time.time() - t0) * 1000

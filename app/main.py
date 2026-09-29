@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from .experiment import load_dataset, run_experiments
+from .models import CLASSIFIERS, LSTM
 from .nlp import Doc, LABELS
 
 ROOT = Path(__file__).parent
@@ -57,12 +58,13 @@ def me(_=Depends(require_login)):
 PRETRAINED = ROOT / "data" / "pretrained.joblib"   # created at image-build time by app/pretrain.py
 
 
-def _job(texts, y):
+def _job(texts, y, include_lstm=True):
     global trained, pool
     def progress(f, msg):
         state.update(progress=round(f, 3), message=msg)
     try:
-        results, models, summary = run_experiments(texts, y, progress)
+        clfs = CLASSIFIERS if include_lstm else [c for c in CLASSIFIERS if c is not LSTM]
+        results, models, summary = run_experiments(texts, y, progress, classifiers=clfs)
         test_idx = summary.pop("test_idx")
         with lock:
             trained = models
@@ -72,30 +74,42 @@ def _job(texts, y):
         state.update(state="error", error=str(e))
 
 
-def start_job(texts, y):
+def start_job(texts, y, include_lstm=True):
     with lock:
         if state["state"] == "running":
             raise HTTPException(409, "A run is already in progress")
         state.update(state="running", progress=0.0, message="Starting...", error=None)
-    threading.Thread(target=_job, args=(texts, y), daemon=True).start()
+    threading.Thread(target=_job, args=(texts, y, include_lstm), daemon=True).start()
+
+
+def load_pretrained() -> bool:
+    """Load the models trained at image-build time. Returns False if they don't exist."""
+    global trained, pool
+    if not PRETRAINED.exists():
+        return False
+    import joblib
+    d = joblib.load(PRETRAINED)
+    with lock:
+        trained, pool = d["trained"], d["pool"]
+        state.update(state="done", progress=1.0, message="Done", results=d["results"], summary=d["summary"], error=None)
+    return True
 
 
 @app.on_event("startup")
 def warm_start():
-    global trained, pool
-    if PRETRAINED.exists():                      # instant start: models were trained when the image was built
-        import joblib
-        d = joblib.load(PRETRAINED)
-        trained, pool = d["trained"], d["pool"]
-        state.update(state="done", progress=1.0, message="Done", results=d["results"], summary=d["summary"])
+    if load_pretrained():                        # instant start: models were trained when the image was built
         return
     texts, y, _ = load_dataset((ROOT / "data" / "dataset.txt").read_text(encoding="utf-8"))
     start_job(texts, y)
 
 
 @app.post("/api/run")
-async def run(file: UploadFile | None = File(None), _=Depends(require_login)):
+async def run(file: UploadFile | None = File(None), include_lstm: bool = Form(False), _=Depends(require_login)):
     if file is None or not file.filename:
+        if state["state"] == "running":
+            raise HTTPException(409, "A run is already in progress")
+        if load_pretrained():                    # bundled dataset: results are identical, so reuse them
+            return {"started": False, "cached": True}
         texts, y, skipped = load_dataset((ROOT / "data" / "dataset.txt").read_text(encoding="utf-8"))
     else:
         raw = await file.read()
@@ -108,7 +122,7 @@ async def run(file: UploadFile | None = File(None), _=Depends(require_login)):
     if len(texts) > MAX_ROWS:
         idx = random.Random(1).sample(range(len(texts)), MAX_ROWS)
         texts, y = [texts[i] for i in idx], y[idx]
-    start_job(texts, y)
+    start_job(texts, y, include_lstm)
     return {"started": True, "rows": len(texts), "skipped": skipped}
 
 

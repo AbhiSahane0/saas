@@ -30,3 +30,4 @@ code{background:#0f1428;padding:1px 5px;border-radius:4px}
 select{padding:10px 12px;background:#0f1428;border:1px solid var(--line);border-radius:8px;color:var(--txt);font:inherit}
 #tally{margin:8px 0}.item a{color:var(--acc);font-size:12px}
 .rate button{padding:2px 8px;margin-left:4px}
+.chk{display:flex;gap:6px;align-items:center;margin:0;font-size:13px}.chk input{width:auto;margin:0}

@@ -34,7 +34,7 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
 
 $('#runBtn').onclick = async () => {
   $('#runErr').textContent = '';
-  const fd = new FormData(); const f = $('#file').files[0]; if (f) fd.append('file', f);
+  const fd = new FormData(); const f = $('#file').files[0]; if (f) { fd.append('file', f); fd.append('include_lstm', $('#lstm').checked); }
   try { await api('/api/run', {method:'POST', body: fd}); refresh(); } catch (e) { $('#runErr').textContent = e.message; }
 };
 
