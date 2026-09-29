@@ -236,6 +236,12 @@ async def stream(request: Request, source: str = "dataset", q: str = "", _=Depen
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
+@app.get("/api/health")
+def health():
+    """Public liveness check (no login) - handy for Render's health check and uptime pings."""
+    return {"status": "success"}
+
+
 @app.get("/")
 def index():
     return FileResponse(ROOT / "static" / "index.html")
