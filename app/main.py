@@ -97,7 +97,9 @@ def load_pretrained() -> bool:
 
 @app.on_event("startup")
 def warm_start():
-    if load_pretrained():                        # instant start: models were trained when the image was built
+    loaded = load_pretrained()
+    print(f"[startup] pretrained models {'loaded' if loaded else 'NOT found - training now'}", flush=True)
+    if loaded:                                   # instant start: models were trained when the image was built
         return
     texts, y, _ = load_dataset((ROOT / "data" / "dataset.txt").read_text(encoding="utf-8"))
     start_job(texts, y)
@@ -126,9 +128,26 @@ async def run(file: UploadFile | None = File(None), include_lstm: bool = Form(Fa
     return {"started": True, "rows": len(texts), "skipped": skipped}
 
 
-@app.get("/api/status")
-def status(_=Depends(require_login)):
-    return state
+@app.get("/api/results")
+def results(_=Depends(require_login)):
+    """Fetched once on page load and once after a run finishes - the page does not poll."""
+    return {"state": state["state"], "results": state["results"], "summary": state["summary"], "error": state["error"]}
+
+
+@app.get("/api/progress")
+async def progress(request: Request, _=Depends(require_login)):
+    """One server-sent-events connection that reports training progress and closes when the run ends."""
+    async def gen():
+        last = None
+        while state["state"] == "running":
+            if await request.is_disconnected():
+                return
+            cur = {"state": "running", "progress": state["progress"], "message": state["message"]}
+            if cur != last:
+                yield _sse(cur); last = cur
+            await asyncio.sleep(1)
+        yield _sse({"state": state["state"], "progress": state["progress"], "message": state["message"], "error": state["error"]})
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 def _best_per_classifier():

@@ -3,7 +3,7 @@ const COLORS = {joy:'#f5c542',sadness:'#4da3ff',anger:'#ff6b6b',fear:'#a78bfa',l
 const pill = e => `<span class="pill" style="background:${COLORS[e]}">${e}</span>`;
 const pct = x => (x * 100).toFixed(1) + '%';
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let poll, charts = {}, results = [], sortKey = 'accuracy', es;
+let prog, charts = {}, results = [], sortKey = 'accuracy', es;
 Chart.defaults.color = '#96a3c8'; Chart.defaults.borderColor = '#262d55'; Chart.defaults.animation = false;
 
 async function api(url, opts) {
@@ -13,11 +13,8 @@ async function api(url, opts) {
   if (!r.ok) throw new Error(j.detail || r.statusText);
   return j;
 }
-function showLogin() { $('#app').hidden = true; $('#login').hidden = false; stopPolling(); }
+function showLogin() { $('#app').hidden = true; $('#login').hidden = false; if (prog) prog.close(); }
 function showApp() { $('#login').hidden = true; $('#app').hidden = false; refresh(); }
-// poll /api/status only while a training run is in progress; stop as soon as it finishes
-function startPolling() { if (!poll) poll = setInterval(refresh, 1500); }
-function stopPolling() { clearInterval(poll); poll = null; }
 
 $('#loginForm').onsubmit = async e => {
   e.preventDefault(); $('#loginErr').textContent = '';
@@ -38,15 +35,30 @@ $('#runBtn').onclick = async () => {
   try { await api('/api/run', {method:'POST', body: fd}); refresh(); } catch (e) { $('#runErr').textContent = e.message; }
 };
 
+// One fetch of the results (page load / run finished). Progress during a run arrives over a single SSE connection.
 async function refresh() {
-  let s; try { s = await api('/api/status'); } catch { return stopPolling(); }
-  if (s.state === 'running') startPolling(); else stopPolling();
-  $('#barFill').style.width = (s.state === 'done' ? 100 : s.progress * 100) + '%';
-  $('#statusMsg').textContent = s.state === 'done' ? `Done – ${s.results.length} experiments complete.` :
-    s.state === 'error' ? '' : s.message;
-  if (s.state === 'error') $('#runErr').textContent = s.error;
+  let s; try { s = await api('/api/results'); } catch { return; }
+  applyState(s);
+  if (s.state === 'running') watchProgress();
+}
+function applyState(s) {
+  $('#barFill').style.width = (s.state === 'done' ? 100 : 0) + '%';
+  $('#statusMsg').textContent = s.state === 'done' ? `Done – ${s.results.length} experiments complete.` : s.state === 'running' ? 'Training…' : '';
+  $('#runErr').textContent = s.state === 'error' ? s.error : '';
   $('#runBtn').disabled = s.state === 'running'; $('#predictBtn').disabled = s.state !== 'done'; $('#streamBtn').disabled = s.state !== 'done';
   if (s.state === 'done' && JSON.stringify(s.results) !== JSON.stringify(results)) { results = s.results; render(s.summary); }
+}
+function watchProgress() {
+  if (prog) prog.close();
+  $('#runBtn').disabled = true;
+  prog = new EventSource('/api/progress');
+  prog.onmessage = m => {
+    const d = JSON.parse(m.data);
+    $('#barFill').style.width = (d.progress * 100) + '%';
+    $('#statusMsg').textContent = d.message;
+    if (d.state !== 'running') { prog.close(); prog = null; refresh(); }
+  };
+  prog.onerror = () => { if (prog) { prog.close(); prog = null; setTimeout(refresh, 3000); } };
 }
 
 function card(v, l) { return `<div class="c"><b>${v}</b><span>${l}</span></div>`; }
