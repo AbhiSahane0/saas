@@ -12,7 +12,7 @@ from .nlp import Doc, LABELS
 ROOT = Path(__file__).parent
 USER = os.getenv("TSAAS_USER", "admin")
 PASSWORD = os.getenv("TSAAS_PASSWORD", "admin")  # demo default - override via env var when deploying
-MAX_ROWS = 20000
+MAX_ROWS = int(os.getenv("TSAAS_MAX_ROWS", "20000"))  # lower this on very small free hosts
 
 app = FastAPI(title="TSaaS - Twitter Emotion Analysis")
 sessions: set[str] = set()
@@ -54,19 +54,19 @@ def me(_=Depends(require_login)):
     return {"user": USER}
 
 
+PRETRAINED = ROOT / "data" / "pretrained.joblib"   # created at image-build time by app/pretrain.py
+
+
 def _job(texts, y):
     global trained, pool
     def progress(f, msg):
         state.update(progress=round(f, 3), message=msg)
     try:
         results, models, summary = run_experiments(texts, y, progress)
-        test_texts = summary.pop("test_texts")
-        # rebuild the held-out labels in the same split order for the live stream
-        from sklearn.model_selection import train_test_split
-        _, te = train_test_split(np.arange(len(texts)), test_size=0.2, random_state=42, stratify=y)
+        test_idx = summary.pop("test_idx")
         with lock:
             trained = models
-            pool = [(texts[i], int(y[i])) for i in te]
+            pool = [(texts[i], int(y[i])) for i in test_idx]
             state.update(state="done", results=results, summary=summary, error=None)
     except Exception as e:  # surface to the UI instead of dying silently
         state.update(state="error", error=str(e))
@@ -82,6 +82,13 @@ def start_job(texts, y):
 
 @app.on_event("startup")
 def warm_start():
+    global trained, pool
+    if PRETRAINED.exists():                      # instant start: models were trained when the image was built
+        import joblib
+        d = joblib.load(PRETRAINED)
+        trained, pool = d["trained"], d["pool"]
+        state.update(state="done", progress=1.0, message="Done", results=d["results"], summary=d["summary"])
+        return
     texts, y, _ = load_dataset((ROOT / "data" / "dataset.txt").read_text(encoding="utf-8"))
     start_job(texts, y)
 

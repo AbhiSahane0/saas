@@ -55,6 +55,6 @@ def run_experiments(texts, y, progress=None, test_size=0.2, seed=42):
             done += 1
     summary = {"total": len(docs), "train": len(dtr), "test": len(dte),
                "distribution": {LABELS[i]: int((y == i).sum()) for i in range(6)},
-               "test_texts": [texts[i] for i in te]}
+               "test_idx": te.tolist()}
     if progress: progress(1.0, "Done")
     return results, trained, summary
